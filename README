@@ -1,0 +1,79 @@
+## Profeanu Ioana, 333CA
+# Tema1 APD - README file
+-------------------------------------------------------------------------------
+* Program Description
+   ~ Implemented a parallel processing program that finds the number of
+   perfect powers for a range of possible exponents and an input series of 
+   numbers, using the map-reduce paradigm;
+-------------------------------------------------------------------------------
+* Initial thread
+   ~ firstly, read the file names in which the to-be-processed numbers are
+   stored from a given input file; the names are stored in a queue;
+   ~ secondly, initialize the data used to manage the two types of threads;
+   concomitantly, create the mapper threads and the reducer threads, and then
+   join them;
+-------------------------------------------------------------------------------
+* Mapper threads
+   ~ created a structure that stores the arguments which will be given to the
+   mapper function; it contains the id, the two mutual mutexes used to manage
+   critical zones, a common barrier for both the mappers and reducers and an
+   unordered map used to store the data parsed by each mapper;
+   ~ in order to make a dynamic repartition of the files, a while loop is used
+   within the mappers function; the exit condition is whether or not there are
+   still files left to parse;
+      ~ for that, a function is used to retrieve the file name from the queue;
+      because we do not want two threads to parse the same file or make changes
+      to the queue simultaneously, a mutex is used to lock the critical zone;
+      the thread that gets inside checks if the queue is empty and if not, pops
+      it and retrieves the file name at the front;
+   ~ for each number in the file, find the exponents vector for which it is a
+   perfect power using a binary search function (explained in the next section)
+   and then add the current number to a vector that has unordered sets as its
+   elements; the number is added to the set located at the position equal to
+   the value of the exponent in the vector;
+   ~ when no more files can be processed, we want to add the previous vector of
+   unordered sets which contain the perfect powers for each possible exponent,
+   to a common unordered map which contains the mapper thread id as key and the
+   vector as value; because it is a critical zone (more threads can write data
+   in the map at the same time), we use another mutex to manage the
+   synchronization;
+   ~ at the end, add a common barrier to wait for all the mapper threads to
+   have finished parsing the data and for all the reducer threads to be ready
+   to start;
+-------------------------------------------------------------------------------
+* Binary search for finding perfect powers
+   ~ because we know all the possible exponents for the perfect powers and we
+   want to find out if a number is a perfect power (and if so, for what
+   exponents), it comes down to find if there is a possible base for each
+   exponent that represents a perfect power equal to the number;
+   ~ all the valid exponents are stored in a vector;
+   ~ for each exponent possible, first check if the number is equal to 1 (if
+   so, the exponent is valid); if the number is lower than 2^exponent (the
+   lowest possible perfect power for the exponent), it means that the number
+   is not a perfect power for that exponent; otherwise, start the binary search
+   for the interval starting at 3 and ending at sqrt(number) (highest perfect
+   power possible); as in every binary search, check if the middle value is a
+   valid one (if middle^exponent is equal to the number); otherwise, change the
+   look-up interval accordingly; every valid exponent is added to the exponents
+   vector;
+-------------------------------------------------------------------------------
+* Reducer threads
+   ~ similarly to the mapper threads, we created a structure for the argument
+   used within the reducers function;
+   ~ firstly, each reducer thread has to wait for the mappers to finish; the
+   barrier waits for no. mappers + no. reducers to reach it; thus, we ensure
+   that the reducers start processing only when the data from the mappers are
+   fully available;
+   ~ initialize an unordered set that will contain all the distinct numbers
+   from all the files that are perfect powers for the exponent equal to the
+   reducer's id + 2 (the threads id starts at 0);
+   ~ then, the current thread accesses every key entry in the map of lists
+   (it gets the data previously parsed by all the mappers) and gets the
+   numbers stored in the vector (the map value) at the index equal to the
+   reducer's id + 2; these numbers are then stored in an unordered set which
+   eventually will contain all the distinct numbers from all the files that
+   are perfect power for the exponent equal to the reducer's id + 2;
+   ~ finally, write the size of the unordered set (which is the total number
+   of perfect powers for the current exponent) in a file; then use a new
+   barrier to wait for all the reducer threads to finish;
+-------------------------------------------------------------------------------
